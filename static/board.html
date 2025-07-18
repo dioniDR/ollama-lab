@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizarrón de Ideas - Ollama Lab</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #4a5568;
+        }
+
+        .back-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Board Area */
+        .board {
+            padding-top: 80px;
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Add Button */
+        .add-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(255, 107, 107, 0.4);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .add-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Sticker */
+        .sticker {
+            position: absolute;
+            width: 300px;
+            min-height: 200px;
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            cursor: move;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .sticker:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .sticker.dragging {
+            transform: rotate(5deg) scale(1.05);
+            z-index: 1000;
+        }
+
+        /* Sticker Colors */
+        .sticker.yellow { background: linear-gradient(135deg, #ffeaa7, #fdcb6e); }
+        .sticker.pink { background: linear-gradient(135deg, #fd79a8, #e84393); }
+        .sticker.blue { background: linear-gradient(135deg, #74b9ff, #0984e3); }
+        .sticker.green { background: linear-gradient(135deg, #55efc4, #00b894); }
+        .sticker.orange { background: linear-gradient(135deg, #fd79a8, #e17055); }
+        .sticker.purple { background: linear-gradient(135deg, #a29bfe, #6c5ce7); }
+
+        .sticker-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .sticker-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: rgba(0, 0, 0, 0.8);
+        }
+
+        .delete-btn {
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 12px;
+            color: rgba(0, 0, 0, 0.6);
+            transition: all 0.3s ease;
+        }
+
+        .delete-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+            color: #e74c3c;
+        }
+
+        .model-selector {
+            width: 100%;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .message-preview {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            max-height: 60px;
+            overflow-y: auto;
+            color: rgba(0, 0, 0, 0.8);
+        }
+
+        .quick-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .sticker-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .chat-btn, .send-btn {
+            flex: 1;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        .chat-btn:hover, .send-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .thinking {
+            opacity: 0.7;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: white;
+            width: 90%;
+            max-width: 800px;
+            height: 90%;
+            margin: 5% auto;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .modal-config {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .config-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .config-group label {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .config-input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .color-picker {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .color-option.selected {
+            border-color: #333;
+            transform: scale(1.1);
+        }
+
+        .chat-area {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            line-height: 1.4;
+        }
+
+        .message.user {
+            background: #e3f2fd;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant {
+            background: #f5f5f5;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
+
+        .input-area {
+            padding: 1rem;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            resize: none;
+        }
+
+        .send-message-btn {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .send-message-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+            }
+            
+            .sticker {
+                width: 250px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                height: 95%;
+                margin: 2.5% auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗂️ Pizarrón de Ideas</h1>
+        <button class="back-btn" onclick="window.location.href='/'">← Volver al Chat</button>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <button class="add-btn" onclick="createSticker()">+</button>
+
+    <!-- Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Conversación</h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-config">
+                <div class="config-group">
+                    <label>Modelo:</label>
+                    <select class="config-input" id="modal-model"></select>
+                </div>
+                <div class="config-group">
+                    <label>Prompt del Sistema:</label>
+                    <input type="text" class="config-input" id="modal-system-prompt" placeholder="Eres un asistente útil...">
+                </div>
+                <div class="config-group">
+                    <label>Color:</label>
+                    <div class="color-picker">
+                        <div class="color-option yellow" data-color="yellow" style="background: linear-gradient(135deg, #ffeaa7, #fdcb6e);"></div>
+                        <div class="color-option pink" data-color="pink" style="background: linear-gradient(135deg, #fd79a8, #e84393);"></div>
+                        <div class="color-option blue" data-color="blue" style="background: linear-gradient(135deg, #74b9ff, #0984e3);"></div>
+                        <div class="color-option green" data-color="green" style="background: linear-gradient(135deg, #55efc4, #00b894);"></div>
+                        <div class="color-option orange" data-color="orange" style="background: linear-gradient(135deg, #fd79a8, #e17055);"></div>
+                        <div class="color-option purple" data-color="purple" style="background: linear-gradient(135deg, #a29bfe, #6c5ce7);"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-area" id="chat-area"></div>
+            <div class="input-area">
+                <textarea class="message-input" id="message-input" placeholder="Escribe tu mensaje..." rows="2"></textarea>
+                <button class="send-message-btn" id="send-message-btn" onclick="sendMessage()">Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stickers = [];
+        let currentSticker = null;
+        let models = [];
+        let draggedSticker = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        // Initialize
+        async function init() {
+            loadStickers();
+            await loadModels();
+            setupEventListeners();
+        }
+
+        // Load models from API
+        async function loadModels() {
+            try {
+                const response = await fetch('/models');
+                const data = await response.json();
+                models = data.models || [];
+                updateModelSelectors();
+            } catch (error) {
+                console.error('Error loading models:', error);
+                models = [{ name: 'llama3.2' }];
+                updateModelSelectors();
+            }
+        }
+
+        // Update all model selectors
+        function updateModelSelectors() {
+            const selectors = document.querySelectorAll('.model-selector, #modal-model');
+            selectors.forEach(selector => {
+                selector.innerHTML = '';
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    option.textContent = model.name;
+                    selector.appendChild(option);
+                });
+            });
+        }
+
+        // Create new sticker
+        function createSticker() {
+            const colors = ['yellow', 'pink', 'blue', 'green', 'orange', 'purple'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            const sticker = {
+                id: Date.now(),
+                title: `Idea ${stickers.length + 1}`,
+                model: models[0]?.name || 'llama3.2',
+                systemPrompt: 'Eres un asistente útil.',
+                color: randomColor,
+                x: Math.random() * (window.innerWidth - 350) + 50,
+                y: Math.random() * (window.innerHeight - 300) + 150,
+                messages: [],
+                thinking: false
+            };
+
+            stickers.push(sticker);
+            renderSticker(sticker);
+            saveStickers();
+        }
+
+        // Render sticker
+        function renderSticker(sticker) {
+            const stickerEl = document.createElement('div');
+            stickerEl.className = `sticker ${sticker.color}`;
+            stickerEl.style.left = sticker.x + 'px';
+            stickerEl.style.top = sticker.y + 'px';
+            stickerEl.dataset.id = sticker.id;
+
+            const lastMessage = sticker.messages.length > 0 ? 
+                sticker.messages[sticker.messages.length - 1].content.substring(0, 100) + '...' : 
+                'Sin mensajes aún';
+
+            stickerEl.innerHTML = `
+                <div class="sticker-header">
+                    <div class="sticker-title">${sticker.title}</div>
+                    <button class="delete-btn" onclick="deleteSticker(${sticker.id})" title="Eliminar">✕</button>
+                </div>
+                <select class="model-selector" onchange="updateStickerModel(${sticker.id}, this.value)">
+                    ${models.map(model => 
+                        `<option value="${model.name}" ${model.name === sticker.model ? 'selected' : ''}>${model.name}</option>`
+                    ).join('')}
+                </select>
+                <div class="message-preview">${lastMessage}</div>
+                <input type="text" class="quick-input" placeholder="Mensaje rápido..." 
+                       onkeypress="if(event.key==='Enter') sendQuickMessage(${sticker.id}, this.value)">
+                <div class="sticker-actions">
+                    <button class="chat-btn" onclick="openModal(${sticker.id})">💬 Chat</button>
+                    <button class="send-btn" onclick="sendQuickMessage(${sticker.id})">Enviar</button>
+                </div>
+            `;
+
+            if (sticker.thinking) {
+                stickerEl.classList.add('thinking');
+            }
+
+            // Add drag functionality
+            stickerEl.addEventListener('mousedown', startDrag);
+            
+            document.getElementById('board').appendChild(stickerEl);
+        }
+
+        // Drag functionality
+        function startDrag(e) {
+            if (e.target.closest('.delete-btn, .model-selector, .quick-input, .chat-btn, .send-btn')) {
+                return;
+            }
+
+            draggedSticker = e.currentTarget;
+            const rect = draggedSticker.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+            
+            draggedSticker.classList.add('dragging');
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function drag(e) {
+            if (!draggedSticker) return;
+            
+            const x = e.clientX - dragOffset.x;
+            const y = e.clientY - dragOffset.y;
+            
+            draggedSticker.style.left = Math.max(0, Math.min(x, window.innerWidth - draggedSticker.offsetWidth)) + 'px';
+            draggedSticker.style.top = Math.max(80, Math.min(y, window.innerHeight - draggedSticker.offsetHeight)) + 'px';
+        }
+
+        function stopDrag() {
+            if (!draggedSticker) return;
+            
+            draggedSticker.classList.remove('dragging');
+            
+            // Update sticker position
+            const stickerId = parseInt(draggedSticker.dataset.id);
+            const sticker = stickers.find(s => s.id === stickerId);
+            if (sticker) {
+                sticker.x = parseInt(draggedSticker.style.left);
+                sticker.y = parseInt(draggedSticker.style.top);
+                saveStickers();
+            }
+            
+            draggedSticker = null;
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        // Delete sticker
+        function deleteSticker(id) {
+            if (confirm('¿Estás seguro de que quieres eliminar este sticker?')) {
+                stickers = stickers.filter(s => s.id !== id);
+                document.querySelector(`[data-id="${id}"]`).remove();
+                saveStickers();
+            }
+        }
+
+        // Update sticker model
+        function updateStickerModel(id, model) {
+            const sticker = stickers.find(s => s.id === id);
+            if (sticker) {
+                sticker.model = model;
+                saveStickers();
+            }
+        }
+
+        // Send quick message
+        async function sendQuickMessage(id, message = null) {
+            const stickerEl = document.querySelector(`[data-id="${id}"]`);
+            const input = stickerEl.querySelector('.quick-input');
+            
+            if (!message) {
+                message = input.value.trim();
+            }
+            
+            if (!message) return;
+            
+            input.value = '';
+            
+            const sticker = stickers.find(s => s.id === id);
+            if (!sticker) return;
+
+            // Add user message
+            sticker.messages.push({ role: 'user', content: message });
+            
+            // Set thinking state
+            sticker.thinking = true;
+            stickerEl.classList.add('thinking');
+            
+            try {
+                await sendChatMessage(sticker, message);
+            } catch (error) {
+                console.error('Error sending message:', error);
+                sticker.messages.push({ role: 'assistant', content: 'Error: No se pudo enviar el mensaje.' });
+            } finally {
+                sticker.thinking = false;
+                stickerEl.classList.remove('thinking');
+                updateStickerPreview(sticker);
+                saveStickers();
+            }
+        }
+
+        // Send chat message
+        async function sendChatMessage(sticker, message) {
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: message,
+                    model: sticker.model
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let assistantMessage = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.response) {
+                                assistantMessage += data.response;
+                                // Update modal if open for this sticker
+                                if (currentSticker && currentSticker.id === sticker.id) {
+                                    updateModalMessages();
+                                }
+                            }
+                            if (data.done) {
+                                sticker.messages.push({ role: 'assistant', content: assistantMessage });
+                                return;
+                            }
+                        } catch (e) {
+                            // Ignore parsing errors
+                        }
+                    }
+                }
+            }
+        }
+
+        // Update sticker preview
+        function updateStickerPreview(sticker) {
+            const stickerEl = document.querySelector(`[data-id="${sticker.id}"]`);
+            const preview = stickerEl.querySelector('.message-preview');
+            
+            if (sticker.messages.length > 0) {
+                const lastMessage = sticker.messages[sticker.messages.length - 1].content;
+                preview.textContent = lastMessage.substring(0, 100) + (lastMessage.length > 100 ? '...' : '');
+            } else {
+                preview.textContent = 'Sin mensajes aún';
+            }
+        }
+
+        // Modal functions
+        function openModal(id) {
+            currentSticker = stickers.find(s => s.id === id);
+            if (!currentSticker) return;
+
+            document.getElementById('modal-title').textContent = currentSticker.title;
+            document.getElementById('modal-model').value = currentSticker.model;
+            document.getElementById('modal-system-prompt').value = currentSticker.systemPrompt;
+            
+            // Update color selection
+            document.querySelectorAll('.color-option').forEach(option => {
+                option.classList.toggle('selected', option.dataset.color === currentSticker.color);
+            });
+
+            updateModalMessages();
+            document.getElementById('modal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+            currentSticker = null;
+        }
+
+        function updateModalMessages() {
+            const chatArea = document.getElementById('chat-area');
+            chatArea.innerHTML = '';
+
+            if (currentSticker) {
+                currentSticker.messages.forEach(message => {
+                    const messageEl = document.createElement('div');
+                    messageEl.className = `message ${message.role}`;
+                    messageEl.textContent = message.content;
+                    chatArea.appendChild(messageEl);
+                });
+                chatArea.scrollTop = chatArea.scrollHeight;
+            }
+        }
+
+        // Send message from modal
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-message-btn');
+            const message = input.value.trim();
+
+            if (!message || !currentSticker) return;
+
+            input.value = '';
+            sendBtn.disabled = true;
+
+            // Add user message
+            currentSticker.messages.push({ role: 'user', content: message });
+            updateModalMessages();
+
+            try {
+                await sendChatMessage(currentSticker, message);
+                updateModalMessages();
+                updateStickerPreview(currentSticker);
+            } catch (error) {
+                console.error('Error sending message:', error);
+                currentSticker.messages.push({ role: 'assistant', content: 'Error: No se pudo enviar el mensaje.' });
+                updateModalMessages();
+            } finally {
+                sendBtn.disabled = false;
+                saveStickers();
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Modal config changes
+            document.getElementById('modal-model').addEventListener('change', (e) => {
+                if (currentSticker) {
+                    currentSticker.model = e.target.value;
+                    saveStickers();
+                }
+            });
+
+            document.getElementById('modal-system-prompt').addEventListener('input', (e) => {
+                if (currentSticker) {
+                    currentSticker.systemPrompt = e.target.value;
+                    saveStickers();
+                }
+            });
+
+            // Color selection
+            document.querySelectorAll('.color-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    if (currentSticker) {
+                        document.querySelectorAll('.color-option').forEach(o => o.classList.remove('selected'));
+                        option.classList.add('selected');
+                        currentSticker.color = option.dataset.color;
+                        
+                        // Update sticker visual
+                        const stickerEl = document.querySelector(`[data-id="${currentSticker.id}"]`);
+                        stickerEl.className = `sticker ${currentSticker.color}`;
+                        if (currentSticker.thinking) {
+                            stickerEl.classList.add('thinking');
+                        }
+                        
+                        saveStickers();
+                    }
+                });
+            });
+
+            // Enter key in message input
+            document.getElementById('message-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Close modal on background click
+            document.getElementById('modal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('modal')) {
+                    closeModal();
+                }
+            });
+        }
+
+        // Storage functions
+        function saveStickers() {
+            localStorage.setItem('board_stickers', JSON.stringify(stickers));
+        }
+
+        function loadStickers() {
+            const saved = localStorage.getItem('board_stickers');
+            if (saved) {
+                stickers = JSON.parse(saved);
+                stickers.forEach(sticker => {
+                    sticker.thinking = false; // Reset thinking state on load
+                    renderSticker(sticker);
+                });
+            }
+        }
+
+        // Initialize app
+        init();
+    </script>
+</body>
+</html>

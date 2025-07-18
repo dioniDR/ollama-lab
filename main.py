@@ -75,6 +75,15 @@ async def read_root():
     with open("static/index.html", "r") as file:
         return HTMLResponse(content=file.read())
 
+@app.get("/board", response_class=HTMLResponse)
+async def board_page():
+    """Sirve la página del pizarrón de stickers"""
+    try:
+        with open("static/board.html", "r", encoding="utf-8") as file:
+            return HTMLResponse(content=file.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Board page not found")
+
 @app.post("/chat")
 async def chat(request: ChatMessage):
     config = load_config()
