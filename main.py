@@ -48,6 +48,11 @@ def save_prompts(prompts):
 class ChatMessage(BaseModel):
     message: str
     model: str = "llama3.2"
+    system_prompt: Optional[str] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    num_ctx: Optional[int] = None
+    repeat_penalty: Optional[float] = None
 
 class ModelSwitchRequest(BaseModel):
     model: str
@@ -96,23 +101,25 @@ async def chat(request: ChatMessage):
                     "prompt": request.message,
                     "stream": True,
                     "options": {
-                        "temperature": config.get("temperature", 0.7),
-                        "top_p": config.get("top_p", 0.9),
-                        "num_ctx": config.get("num_ctx", 2048),
-                        "repeat_penalty": config.get("repeat_penalty", 1.1)
+                        "temperature": request.temperature if request.temperature is not None else config.get("temperature", 0.7),
+                        "top_p": request.top_p if request.top_p is not None else config.get("top_p", 0.9),
+                        "num_ctx": request.num_ctx if request.num_ctx is not None else config.get("num_ctx", 2048),
+                        "repeat_penalty": request.repeat_penalty if request.repeat_penalty is not None else config.get("repeat_penalty", 1.1)
                     }
                 }
                 
-                if config.get("system_prompt"):
-                    system_prompt = config.get("system_prompt")
+                # Priorizar system_prompt del request sobre el global
+                system_prompt_to_use = request.system_prompt if request.system_prompt is not None else config.get("system_prompt")
+                
+                if system_prompt_to_use:
                     prompts = load_prompts()
                     
                     for prompt_id, prompt_data in prompts.items():
-                        if prompt_data["prompt"] == system_prompt:
-                            payload["system"] = f"[ID:{prompt_id}] {system_prompt}"
+                        if prompt_data["prompt"] == system_prompt_to_use:
+                            payload["system"] = f"[ID:{prompt_id}] {system_prompt_to_use}"
                             break
                     else:
-                        payload["system"] = system_prompt
+                        payload["system"] = system_prompt_to_use
                 
                 async with client.stream(
                     "POST",

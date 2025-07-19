@@ -129,9 +129,16 @@
             font-weight: bold;
             font-size: 1.1rem;
             color: rgba(0, 0, 0, 0.8);
+            flex: 1;
         }
 
-        .delete-btn {
+        .sticker-controls {
+            display: flex;
+            gap: 0.25rem;
+            align-items: center;
+        }
+
+        .control-btn {
             background: rgba(255, 255, 255, 0.3);
             border: none;
             border-radius: 50%;
@@ -141,10 +148,21 @@
             font-size: 12px;
             color: rgba(0, 0, 0, 0.6);
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+
+        .config-btn:hover {
+            color: #007acc;
         }
 
         .delete-btn:hover {
-            background: rgba(255, 255, 255, 0.5);
             color: #e74c3c;
         }
 
@@ -254,10 +272,10 @@
         .modal-config {
             padding: 1rem;
             border-bottom: 1px solid #eee;
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
-            flex-wrap: wrap;
-            align-items: center;
+            align-items: end;
         }
 
         .config-group {
@@ -269,6 +287,7 @@
         .config-group label {
             font-size: 0.8rem;
             color: #666;
+            font-weight: 500;
         }
 
         .config-input {
@@ -276,6 +295,12 @@
             border: 1px solid #ddd;
             border-radius: 6px;
             font-size: 0.9rem;
+        }
+
+        .config-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
         }
 
         .color-picker {
@@ -356,6 +381,93 @@
             cursor: not-allowed;
         }
 
+        /* Config Modal */
+        .config-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            z-index: 3000;
+        }
+
+        .config-modal-content {
+            background: white;
+            width: 90%;
+            max-width: 600px;
+            margin: 5% auto;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .config-modal-header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .config-modal-body {
+            padding: 1.5rem;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .config-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .config-section h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0.5rem;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .config-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            padding: 1rem;
+            border-top: 1px solid #eee;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .header {
@@ -366,10 +478,14 @@
                 width: 250px;
             }
             
-            .modal-content {
+            .modal-content, .config-modal-content {
                 width: 95%;
                 height: 95%;
                 margin: 2.5% auto;
+            }
+
+            .modal-config {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -377,14 +493,17 @@
 <body>
     <div class="header">
         <h1>🗂️ Pizarrón de Ideas</h1>
-        <button class="back-btn" onclick="window.location.href='/'">← Volver al Chat</button>
+        <div style="display: flex; gap: 0.5rem;">
+            <button class="back-btn" onclick="openGlobalConfigModal()">⚙️ Configuración Global</button>
+            <button class="back-btn" onclick="window.location.href='/'">← Volver al Chat</button>
+        </div>
     </div>
 
     <div class="board" id="board"></div>
 
     <button class="add-btn" onclick="createSticker()">+</button>
 
-    <!-- Modal -->
+    <!-- Chat Modal -->
     <div class="modal" id="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -395,10 +514,6 @@
                 <div class="config-group">
                     <label>Modelo:</label>
                     <select class="config-input" id="modal-model"></select>
-                </div>
-                <div class="config-group">
-                    <label>Prompt del Sistema:</label>
-                    <input type="text" class="config-input" id="modal-system-prompt" placeholder="Eres un asistente útil...">
                 </div>
                 <div class="config-group">
                     <label>Color:</label>
@@ -420,17 +535,166 @@
         </div>
     </div>
 
+    <!-- Config Modal -->
+    <div class="config-modal" id="config-modal">
+        <div class="config-modal-content">
+            <div class="config-modal-header">
+                <h2>⚙️ Configuración del Sticker</h2>
+                <button class="close-btn" onclick="closeConfigModal()">&times;</button>
+            </div>
+            <div class="config-modal-body">
+                <div class="config-section">
+                    <h3>🎯 Prompt del Sistema</h3>
+                    <div class="config-group">
+                        <label>Prompts Guardados:</label>
+                        <select id="config-saved-prompts" class="config-input" onchange="loadSelectedPrompt()">
+                            <option value="">-- Seleccionar prompt guardado --</option>
+                        </select>
+                    </div>
+                    <div class="config-group">
+                        <label>Prompt personalizado:</label>
+                        <textarea id="config-system-prompt" class="config-input" rows="4" 
+                                placeholder="Eres un asistente útil. Describe brevemente lo que necesitas..."></textarea>
+                    </div>
+                    <div class="config-group">
+                        <label>
+                            <input type="checkbox" id="config-save-prompt"> Guardar este prompt como plantilla
+                        </label>
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h3>🤖 Modelo y Parámetros</h3>
+                    <div class="config-grid">
+                        <div class="config-group">
+                            <label>Modelo:</label>
+                            <select id="config-model" class="config-input"></select>
+                        </div>
+                        <div class="config-group">
+                            <label>Temperatura (0.0 - 2.0):</label>
+                            <input type="number" id="config-temperature" class="config-input" 
+                                   min="0" max="2" step="0.1" value="0.7">
+                        </div>
+                        <div class="config-group">
+                            <label>Top P (0.0 - 1.0):</label>
+                            <input type="number" id="config-top-p" class="config-input" 
+                                   min="0" max="1" step="0.1" value="0.9">
+                        </div>
+                        <div class="config-group">
+                            <label>Contexto (tokens):</label>
+                            <input type="number" id="config-num-ctx" class="config-input" 
+                                   min="512" max="8192" step="512" value="2048">
+                        </div>
+                        <div class="config-group">
+                            <label>Penalización Repetición:</label>
+                            <input type="number" id="config-repeat-penalty" class="config-input" 
+                                   min="0.1" max="2" step="0.1" value="1.1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h3>🎨 Apariencia</h3>
+                    <div class="config-group">
+                        <label>Título del sticker:</label>
+                        <input type="text" id="config-title" class="config-input" placeholder="Mi Idea">
+                    </div>
+                    <div class="config-group">
+                        <label>Color:</label>
+                        <div class="color-picker">
+                            <div class="color-option yellow" data-color="yellow" style="background: linear-gradient(135deg, #ffeaa7, #fdcb6e);"></div>
+                            <div class="color-option pink" data-color="pink" style="background: linear-gradient(135deg, #fd79a8, #e84393);"></div>
+                            <div class="color-option blue" data-color="blue" style="background: linear-gradient(135deg, #74b9ff, #0984e3);"></div>
+                            <div class="color-option green" data-color="green" style="background: linear-gradient(135deg, #55efc4, #00b894);"></div>
+                            <div class="color-option orange" data-color="orange" style="background: linear-gradient(135deg, #fd79a8, #e17055);"></div>
+                            <div class="color-option purple" data-color="purple" style="background: linear-gradient(135deg, #a29bfe, #6c5ce7);"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="config-actions">
+                <button class="btn btn-secondary" onclick="closeConfigModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveConfig()">Guardar Configuración</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Config Modal -->
+    <div class="config-modal" id="global-config-modal">
+        <div class="config-modal-content">
+            <div class="config-modal-header">
+                <h2>⚙️ Configuración Global de Prompts</h2>
+                <button class="close-btn" onclick="closeGlobalConfigModal()">&times;</button>
+            </div>
+            <div class="config-modal-body">
+                <div class="config-section">
+                    <h3>🔍 Buscar Prompts</h3>
+                    <div class="config-group">
+                        <input type="text" id="global-search" class="config-input" 
+                               placeholder="Buscar por nombre o descripción..." 
+                               oninput="filterGlobalPrompts()">
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h3>📝 Crear Nuevo Prompt</h3>
+                    <div class="config-grid">
+                        <div class="config-group">
+                            <label>Nombre:</label>
+                            <input type="text" id="global-new-name" class="config-input" 
+                                   placeholder="Nombre del prompt">
+                        </div>
+                        <div class="config-group">
+                            <label>Descripción:</label>
+                            <input type="text" id="global-new-description" class="config-input" 
+                                   placeholder="Descripción opcional">
+                        </div>
+                    </div>
+                    <div class="config-group">
+                        <label>Contenido del Prompt:</label>
+                        <textarea id="global-new-prompt" class="config-input" rows="3" 
+                                placeholder="Eres un asistente especializado en..."></textarea>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <button class="btn btn-primary" onclick="createNewGlobalPrompt()">Crear Prompt</button>
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h3>📚 Prompts Guardados</h3>
+                    <div id="global-prompts-list" style="max-height: 400px; overflow-y: auto;">
+                        <!-- Lista de prompts se carga dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let stickers = [];
         let currentSticker = null;
+        let currentConfigSticker = null;
         let models = [];
         let draggedSticker = null;
         let dragOffset = { x: 0, y: 0 };
+        let globalPrompts = [];
+        let filteredPrompts = [];
+
+        // Default configuration for new stickers
+        const DEFAULT_CONFIG = {
+            model: "gemma3:1b",
+            temperature: 0.7,
+            top_p: 0.9,
+            num_ctx: 2048,
+            repeat_penalty: 1.1,
+            systemPrompt: "Eres un asistente útil. Describe brevemente lo que necesitas y te ayudo."
+        };
 
         // Initialize
         async function init() {
             loadStickers();
             await loadModels();
+            await loadGlobalPrompts();
             setupEventListeners();
         }
 
@@ -443,14 +707,14 @@
                 updateModelSelectors();
             } catch (error) {
                 console.error('Error loading models:', error);
-                models = [{ name: 'llama3.2' }];
+                models = [{ name: 'gemma3:1b' }];
                 updateModelSelectors();
             }
         }
 
         // Update all model selectors
         function updateModelSelectors() {
-            const selectors = document.querySelectorAll('.model-selector, #modal-model');
+            const selectors = document.querySelectorAll('.model-selector, #modal-model, #config-model');
             selectors.forEach(selector => {
                 selector.innerHTML = '';
                 models.forEach(model => {
@@ -470,8 +734,7 @@
             const sticker = {
                 id: Date.now(),
                 title: `Idea ${stickers.length + 1}`,
-                model: models[0]?.name || 'llama3.2',
-                systemPrompt: 'Eres un asistente útil.',
+                ...DEFAULT_CONFIG,
                 color: randomColor,
                 x: Math.random() * (window.innerWidth - 350) + 50,
                 y: Math.random() * (window.innerHeight - 300) + 150,
@@ -499,7 +762,10 @@
             stickerEl.innerHTML = `
                 <div class="sticker-header">
                     <div class="sticker-title">${sticker.title}</div>
-                    <button class="delete-btn" onclick="deleteSticker(${sticker.id})" title="Eliminar">✕</button>
+                    <div class="sticker-controls">
+                        <button class="control-btn config-btn" onclick="openConfigModal(${sticker.id})" title="Configurar">⚙️</button>
+                        <button class="control-btn delete-btn" onclick="deleteSticker(${sticker.id})" title="Eliminar">✕</button>
+                    </div>
                 </div>
                 <select class="model-selector" onchange="updateStickerModel(${sticker.id}, this.value)">
                     ${models.map(model => 
@@ -525,9 +791,79 @@
             document.getElementById('board').appendChild(stickerEl);
         }
 
+        // Config Modal Functions
+        function openConfigModal(id) {
+            currentConfigSticker = stickers.find(s => s.id === id);
+            if (!currentConfigSticker) return;
+
+            // Populate form with current values
+            document.getElementById('config-title').value = currentConfigSticker.title;
+            document.getElementById('config-model').value = currentConfigSticker.model;
+            document.getElementById('config-temperature').value = currentConfigSticker.temperature;
+            document.getElementById('config-top-p').value = currentConfigSticker.top_p;
+            document.getElementById('config-num-ctx').value = currentConfigSticker.num_ctx;
+            document.getElementById('config-repeat-penalty').value = currentConfigSticker.repeat_penalty;
+            document.getElementById('config-system-prompt').value = currentConfigSticker.systemPrompt;
+
+            // Update color selection
+            document.querySelectorAll('#config-modal .color-option').forEach(option => {
+                option.classList.toggle('selected', option.dataset.color === currentConfigSticker.color);
+            });
+
+            document.getElementById('config-modal').style.display = 'block';
+        }
+
+        function closeConfigModal() {
+            document.getElementById('config-modal').style.display = 'none';
+            currentConfigSticker = null;
+        }
+
+        async function saveConfig() {
+            if (!currentConfigSticker) return;
+
+            // Check if user wants to save prompt as template
+            const saveAsTemplate = document.getElementById('config-save-prompt').checked;
+            const promptText = document.getElementById('config-system-prompt').value;
+
+            if (saveAsTemplate && promptText.trim()) {
+                const promptName = generatePromptName(promptText);
+                try {
+                    await savePromptToServer(promptName, promptText, "Creado desde sticker");
+                    document.getElementById('config-save-prompt').checked = false;
+                } catch (error) {
+                    console.error('Error saving prompt:', error);
+                }
+            }
+
+            // Update sticker configuration
+            currentConfigSticker.title = document.getElementById('config-title').value;
+            currentConfigSticker.model = document.getElementById('config-model').value;
+            currentConfigSticker.temperature = parseFloat(document.getElementById('config-temperature').value);
+            currentConfigSticker.top_p = parseFloat(document.getElementById('config-top-p').value);
+            currentConfigSticker.num_ctx = parseInt(document.getElementById('config-num-ctx').value);
+            currentConfigSticker.repeat_penalty = parseFloat(document.getElementById('config-repeat-penalty').value);
+            currentConfigSticker.systemPrompt = promptText || DEFAULT_CONFIG.systemPrompt;
+
+            // Update color
+            const selectedColor = document.querySelector('#config-modal .color-option.selected');
+            if (selectedColor) {
+                currentConfigSticker.color = selectedColor.dataset.color;
+            }
+
+            // Re-render the sticker
+            const stickerEl = document.querySelector(`[data-id="${currentConfigSticker.id}"]`);
+            if (stickerEl) {
+                stickerEl.remove();
+                renderSticker(currentConfigSticker);
+            }
+
+            saveStickers();
+            closeConfigModal();
+        }
+
         // Drag functionality
         function startDrag(e) {
-            if (e.target.closest('.delete-btn, .model-selector, .quick-input, .chat-btn, .send-btn')) {
+            if (e.target.closest('.control-btn, .model-selector, .quick-input, .chat-btn, .send-btn')) {
                 return;
             }
 
@@ -625,14 +961,19 @@
             }
         }
 
-        // Send chat message
+        // Send chat message with sticker-specific configuration
         async function sendChatMessage(sticker, message) {
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: message,
-                    model: sticker.model
+                    model: sticker.model,
+                    system_prompt: sticker.systemPrompt,
+                    temperature: sticker.temperature,
+                    top_p: sticker.top_p,
+                    num_ctx: sticker.num_ctx,
+                    repeat_penalty: sticker.repeat_penalty
                 })
             });
 
@@ -694,10 +1035,9 @@
 
             document.getElementById('modal-title').textContent = currentSticker.title;
             document.getElementById('modal-model').value = currentSticker.model;
-            document.getElementById('modal-system-prompt').value = currentSticker.systemPrompt;
             
             // Update color selection
-            document.querySelectorAll('.color-option').forEach(option => {
+            document.querySelectorAll('#modal .color-option').forEach(option => {
                 option.classList.toggle('selected', option.dataset.color === currentSticker.color);
             });
 
@@ -764,18 +1104,11 @@
                 }
             });
 
-            document.getElementById('modal-system-prompt').addEventListener('input', (e) => {
-                if (currentSticker) {
-                    currentSticker.systemPrompt = e.target.value;
-                    saveStickers();
-                }
-            });
-
-            // Color selection
-            document.querySelectorAll('.color-option').forEach(option => {
+            // Color selection in chat modal
+            document.querySelectorAll('#modal .color-option').forEach(option => {
                 option.addEventListener('click', () => {
                     if (currentSticker) {
-                        document.querySelectorAll('.color-option').forEach(o => o.classList.remove('selected'));
+                        document.querySelectorAll('#modal .color-option').forEach(o => o.classList.remove('selected'));
                         option.classList.add('selected');
                         currentSticker.color = option.dataset.color;
                         
@@ -788,6 +1121,14 @@
                         
                         saveStickers();
                     }
+                });
+            });
+
+            // Color selection in config modal
+            document.querySelectorAll('#config-modal .color-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    document.querySelectorAll('#config-modal .color-option').forEach(o => o.classList.remove('selected'));
+                    option.classList.add('selected');
                 });
             });
 
@@ -805,6 +1146,20 @@
                     closeModal();
                 }
             });
+
+            // Close config modal on background click
+            document.getElementById('config-modal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('config-modal')) {
+                    closeConfigModal();
+                }
+            });
+
+            // Close global config modal on background click
+            document.getElementById('global-config-modal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('global-config-modal')) {
+                    closeGlobalConfigModal();
+                }
+            });
         }
 
         // Storage functions
@@ -816,10 +1171,220 @@
             const saved = localStorage.getItem('board_stickers');
             if (saved) {
                 stickers = JSON.parse(saved);
+                // Ensure all stickers have required config properties
                 stickers.forEach(sticker => {
+                    // Add missing properties with defaults
+                    if (!sticker.temperature) sticker.temperature = DEFAULT_CONFIG.temperature;
+                    if (!sticker.top_p) sticker.top_p = DEFAULT_CONFIG.top_p;
+                    if (!sticker.num_ctx) sticker.num_ctx = DEFAULT_CONFIG.num_ctx;
+                    if (!sticker.repeat_penalty) sticker.repeat_penalty = DEFAULT_CONFIG.repeat_penalty;
+                    if (!sticker.systemPrompt) sticker.systemPrompt = DEFAULT_CONFIG.systemPrompt;
+                    
                     sticker.thinking = false; // Reset thinking state on load
                     renderSticker(sticker);
                 });
+            }
+        }
+
+        // Global Prompts Functions
+        async function loadGlobalPrompts() {
+            try {
+                const response = await fetch('/prompts');
+                const data = await response.json();
+                globalPrompts = Object.values(data.prompts || {});
+                filteredPrompts = [...globalPrompts];
+                updatePromptDropdowns();
+                updateGlobalPromptsList();
+            } catch (error) {
+                console.error('Error loading global prompts:', error);
+                globalPrompts = [];
+                filteredPrompts = [];
+            }
+        }
+
+        async function savePromptToServer(name, prompt, description = "") {
+            try {
+                // Check for duplicates
+                const isDuplicate = globalPrompts.some(p => p.prompt.trim() === prompt.trim());
+                if (isDuplicate) {
+                    alert('Este prompt ya existe en los prompts guardados.');
+                    return;
+                }
+
+                const response = await fetch('/prompts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        prompt: prompt,
+                        description: description
+                    })
+                });
+
+                if (response.ok) {
+                    await loadGlobalPrompts();
+                    alert('Prompt guardado exitosamente!');
+                } else {
+                    throw new Error('Error saving prompt');
+                }
+            } catch (error) {
+                console.error('Error saving prompt:', error);
+                alert('Error al guardar el prompt.');
+            }
+        }
+
+        async function deletePromptFromServer(promptId) {
+            try {
+                const response = await fetch(`/prompts/${promptId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadGlobalPrompts();
+                } else {
+                    throw new Error('Error deleting prompt');
+                }
+            } catch (error) {
+                console.error('Error deleting prompt:', error);
+                alert('Error al eliminar el prompt.');
+            }
+        }
+
+        function updatePromptDropdowns() {
+            const selector = document.getElementById('config-saved-prompts');
+            if (selector) {
+                const currentValue = selector.value;
+                selector.innerHTML = '<option value="">-- Seleccionar prompt guardado --</option>';
+                
+                globalPrompts.forEach(prompt => {
+                    const option = document.createElement('option');
+                    option.value = prompt.id;
+                    option.textContent = prompt.name;
+                    selector.appendChild(option);
+                });
+
+                // Restore selection if it still exists
+                if (currentValue && globalPrompts.some(p => p.id === currentValue)) {
+                    selector.value = currentValue;
+                }
+            }
+        }
+
+        function generatePromptName(promptText) {
+            const words = promptText.trim().split(' ').slice(0, 4);
+            return words.join(' ') + (promptText.split(' ').length > 4 ? '...' : '');
+        }
+
+        function loadSelectedPrompt() {
+            const selector = document.getElementById('config-saved-prompts');
+            const promptId = selector.value;
+            
+            if (promptId) {
+                const prompt = globalPrompts.find(p => p.id === promptId);
+                if (prompt) {
+                    document.getElementById('config-system-prompt').value = prompt.prompt;
+                }
+            }
+        }
+
+        // Global Config Modal Functions
+        function openGlobalConfigModal() {
+            updateGlobalPromptsList();
+            document.getElementById('global-config-modal').style.display = 'block';
+        }
+
+        function closeGlobalConfigModal() {
+            document.getElementById('global-config-modal').style.display = 'none';
+            // Clear form
+            document.getElementById('global-new-name').value = '';
+            document.getElementById('global-new-description').value = '';
+            document.getElementById('global-new-prompt').value = '';
+            document.getElementById('global-search').value = '';
+            filteredPrompts = [...globalPrompts];
+        }
+
+        async function createNewGlobalPrompt() {
+            const name = document.getElementById('global-new-name').value.trim();
+            const description = document.getElementById('global-new-description').value.trim();
+            const prompt = document.getElementById('global-new-prompt').value.trim();
+
+            if (!name || !prompt) {
+                alert('Por favor completa el nombre y contenido del prompt.');
+                return;
+            }
+
+            await savePromptToServer(name, prompt, description);
+            
+            // Clear form
+            document.getElementById('global-new-name').value = '';
+            document.getElementById('global-new-description').value = '';
+            document.getElementById('global-new-prompt').value = '';
+        }
+
+        function updateGlobalPromptsList() {
+            const container = document.getElementById('global-prompts-list');
+            container.innerHTML = '';
+
+            if (filteredPrompts.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">No hay prompts guardados.</p>';
+                return;
+            }
+
+            filteredPrompts.forEach(prompt => {
+                const promptEl = document.createElement('div');
+                promptEl.style.cssText = 'border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 0.5rem; background: #f9f9f9;';
+                
+                promptEl.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0 0 0.25rem 0; color: #333;">${prompt.name}</h4>
+                            ${prompt.description ? `<p style="margin: 0; font-size: 0.85rem; color: #666;">${prompt.description}</p>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <button onclick="editGlobalPrompt('${prompt.id}')" style="background: #007acc; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                Editar
+                            </button>
+                            <button onclick="deleteGlobalPrompt('${prompt.id}')" style="background: #e74c3c; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; max-height: 100px; overflow-y: auto;">
+                        ${prompt.prompt}
+                    </div>
+                    ${prompt.last_used ? `<div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">Último uso: ${new Date(prompt.last_used).toLocaleDateString()}</div>` : ''}
+                `;
+                
+                container.appendChild(promptEl);
+            });
+        }
+
+        function filterGlobalPrompts() {
+            const searchTerm = document.getElementById('global-search').value.toLowerCase();
+            filteredPrompts = globalPrompts.filter(prompt => 
+                prompt.name.toLowerCase().includes(searchTerm) ||
+                prompt.description.toLowerCase().includes(searchTerm) ||
+                prompt.prompt.toLowerCase().includes(searchTerm)
+            );
+            updateGlobalPromptsList();
+        }
+
+        async function deleteGlobalPrompt(promptId) {
+            if (confirm('¿Estás seguro de que quieres eliminar este prompt?')) {
+                await deletePromptFromServer(promptId);
+                updateGlobalPromptsList();
+            }
+        }
+
+        function editGlobalPrompt(promptId) {
+            const prompt = globalPrompts.find(p => p.id === promptId);
+            if (prompt) {
+                document.getElementById('global-new-name').value = prompt.name;
+                document.getElementById('global-new-description').value = prompt.description || '';
+                document.getElementById('global-new-prompt').value = prompt.prompt;
+                
+                // Delete the original and let user create a new one
+                deleteGlobalPrompt(promptId);
             }
         }
 
