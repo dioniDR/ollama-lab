@@ -1,0 +1,1955 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizarrón v2 - Ollama Lab</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #333;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.5rem;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .header.hidden {
+            transform: translateY(-100%);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            color: #4a5568;
+            margin: 0;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .header-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .header-btn.secondary {
+            background: #6c757d;
+        }
+
+        .zoom-display {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #666;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* Canvas Container */
+        .canvas-container {
+            position: absolute;
+            top: 60px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            cursor: grab;
+            background: 
+                radial-gradient(circle at 20px 20px, rgba(255,255,255,0.15) 1px, transparent 1px),
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-size: 40px 40px;
+        }
+
+        .canvas-container.panning {
+            cursor: grabbing;
+        }
+
+        .canvas-container.grid-visible {
+            background: 
+                radial-gradient(circle at 20px 20px, rgba(255,255,255,0.3) 1px, transparent 1px),
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-size: 40px 40px;
+        }
+
+        /* Canvas */
+        .canvas {
+            position: relative;
+            min-width: 100%;
+            min-height: 100%;
+            transform-origin: 0 0;
+            transition: transform 0.1s ease-out;
+        }
+
+        /* Stickers Base */
+        .sticker {
+            position: absolute;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            cursor: move;
+            transition: all 0.3s ease;
+            z-index: 10;
+            min-width: 280px;
+            min-height: 180px;
+            resize: both;
+            overflow: hidden;
+        }
+
+        .sticker:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .sticker.selected {
+            border: 3px solid #667eea;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+            z-index: 50;
+        }
+
+        .sticker.dragging {
+            transform: rotate(2deg) scale(1.03);
+            z-index: 100;
+        }
+
+        .sticker.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Chat Stickers */
+        .sticker.chat {
+            background: linear-gradient(135deg, #ffeaa7, #fdcb6e);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sticker.chat.pink { background: linear-gradient(135deg, #fd79a8, #e84393); }
+        .sticker.chat.blue { background: linear-gradient(135deg, #74b9ff, #0984e3); }
+        .sticker.chat.green { background: linear-gradient(135deg, #55efc4, #00b894); }
+        .sticker.chat.orange { background: linear-gradient(135deg, #fd79a8, #e17055); }
+        .sticker.chat.purple { background: linear-gradient(135deg, #a29bfe, #6c5ce7); }
+
+        /* Text Stickers */
+        .sticker.text {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border: 2px solid #dee2e6;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sticker.text.dark { background: linear-gradient(135deg, #343a40, #495057); color: white; }
+
+        /* Sticker Header */
+        .sticker-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(5px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sticker-title {
+            font-weight: bold;
+            font-size: 1rem;
+            color: rgba(0, 0, 0, 0.8);
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sticker.text .sticker-title {
+            color: #495057;
+        }
+
+        .sticker.text.dark .sticker-title {
+            color: #f8f9fa;
+        }
+
+        .sticker-controls {
+            display: flex;
+            gap: 0.25rem;
+            align-items: center;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 11px;
+            color: rgba(0, 0, 0, 0.6);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+
+        .control-btn.config:hover { color: #007acc; }
+        .control-btn.hide:hover { color: #ffc107; }
+        .control-btn.extract:hover { color: #28a745; }
+        .control-btn.delete:hover { color: #e74c3c; }
+
+        /* Sticker Content */
+        .sticker-content {
+            flex: 1;
+            padding: 0.75rem;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Chat Sticker Content */
+        .chat-config {
+            margin-bottom: 0.5rem;
+        }
+
+        .model-selector {
+            width: 100%;
+            padding: 0.4rem;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .message-preview {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+            max-height: 60px;
+            overflow-y: auto;
+            color: rgba(0, 0, 0, 0.8);
+            flex: 1;
+        }
+
+        .quick-input {
+            width: 100%;
+            padding: 0.4rem;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            resize: none;
+        }
+
+        .chat-actions {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 0.4rem;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .action-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Text Sticker Content */
+        .text-content {
+            flex: 1;
+            border: none;
+            background: transparent;
+            resize: none;
+            font-family: inherit;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            outline: none;
+            color: inherit;
+        }
+
+        .text-content:focus {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .text-preview {
+            flex: 1;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        /* Animations */
+        .thinking {
+            opacity: 0.7;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            z-index: 2000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            z-index: 3000;
+        }
+
+        .modal-content {
+            background: white;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            margin: 7.5% auto;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-body {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 1rem;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Config sections */
+        .config-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .config-section h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0.5rem;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .config-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .config-group label {
+            font-size: 0.85rem;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .config-input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .config-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+
+        /* Color picker */
+        .color-picker {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .color-option.selected {
+            border-color: #333;
+            transform: scale(1.1);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 0.5rem 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.2rem;
+            }
+
+            .header-btn {
+                padding: 0.3rem 0.6rem;
+                font-size: 0.8rem;
+            }
+            
+            .sticker {
+                min-width: 250px;
+                min-height: 150px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                margin: 5% auto;
+            }
+
+            .config-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Keyboard focus */
+        .sticker:focus,
+        .header-btn:focus,
+        .control-btn:focus {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header" id="header">
+        <div class="header-left">
+            <h1>🧪 Pizarrón v2</h1>
+            <div class="zoom-display" id="zoom-display" title="Nivel de zoom actual">100%</div>
+        </div>
+        <div class="header-controls">
+            <button class="header-btn" onclick="createChatSticker()" title="Ctrl+N">
+                💬 Chat
+            </button>
+            <button class="header-btn" onclick="createTextSticker()" title="Ctrl+Shift+N">
+                📝 Texto
+            </button>
+            <button class="header-btn secondary" onclick="toggleAllStickers()" title="Ctrl+H">
+                👁️ <span id="hide-toggle-text">Ocultar</span>
+            </button>
+            <button class="header-btn secondary" onclick="togglePresentationMode()" title="Ctrl+P">
+                🎯 Presentar
+            </button>
+            <button class="header-btn secondary" onclick="openGlobalPromptsModal()" title="Gestionar prompts">
+                ⚙️ Prompts
+            </button>
+            <button class="header-btn secondary" onclick="toggleGrid()" title="Ctrl+G">
+                #️⃣ Grid
+            </button>
+            <button class="header-btn" onclick="window.location.href='/'">
+                ← Chat
+            </button>
+        </div>
+    </div>
+
+    <!-- Canvas Container -->
+    <div class="canvas-container" id="canvas-container">
+        <div class="canvas" id="canvas">
+            <!-- Stickers will be rendered here -->
+        </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="notification" id="notification"></div>
+
+    <!-- Chat Modal -->
+    <div class="modal" id="chat-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="chat-modal-title">Conversación</h2>
+                <button class="close-btn" onclick="closeChatModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="chat-messages" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                    <!-- Messages will be rendered here -->
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <textarea id="chat-input" placeholder="Escribe tu mensaje..." style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; resize: none;" rows="2"></textarea>
+                    <button class="btn btn-primary" onclick="sendChatMessage()" id="send-btn">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config Modal -->
+    <div class="modal" id="config-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="config-modal-title">Configuración</h2>
+                <button class="close-btn" onclick="closeConfigModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="config-modal-body">
+                <!-- Config content will be rendered dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeConfigModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveConfig()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Prompts Modal -->
+    <div class="modal" id="prompts-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📚 Gestión de Prompts Globales</h2>
+                <button class="close-btn" onclick="closeGlobalPromptsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="config-section">
+                    <h3>🔍 Buscar Prompts</h3>
+                    <div class="config-group">
+                        <input type="text" id="prompt-search" class="config-input" 
+                               placeholder="Buscar por nombre o contenido..." 
+                               oninput="filterPrompts()">
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h3>📝 Crear Nuevo Prompt</h3>
+                    <div class="config-grid">
+                        <div class="config-group">
+                            <label>Nombre:</label>
+                            <input type="text" id="new-prompt-name" class="config-input" 
+                                   placeholder="Nombre del prompt">
+                        </div>
+                        <div class="config-group">
+                            <label>Descripción:</label>
+                            <input type="text" id="new-prompt-description" class="config-input" 
+                                   placeholder="Descripción opcional">
+                        </div>
+                    </div>
+                    <div class="config-group">
+                        <label>Contenido del Prompt:</label>
+                        <textarea id="new-prompt-content" class="config-input" rows="3" 
+                                placeholder="Eres un asistente especializado en..."></textarea>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <button class="btn btn-primary" onclick="createNewPrompt()">Crear Prompt</button>
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h3>📚 Prompts Guardados</h3>
+                    <div id="prompts-list" style="max-height: 400px; overflow-y: auto;">
+                        <!-- Prompts list will be rendered here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let stickers = [];
+        let models = [];
+        let globalPrompts = [];
+        let filteredPrompts = [];
+        let selectedSticker = null;
+        let currentConfigSticker = null;
+        let currentChatSticker = null;
+
+        // Canvas state
+        let canvasState = {
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+            isPanning: false,
+            lastPanPoint: { x: 0, y: 0 }
+        };
+
+        // App state
+        let appState = {
+            allHidden: false,
+            presentationMode: false,
+            gridVisible: false
+        };
+
+        // Drag state
+        let dragState = {
+            isDragging: false,
+            draggedSticker: null,
+            dragOffset: { x: 0, y: 0 }
+        };
+
+        // Default configurations
+        const DEFAULT_CHAT_CONFIG = {
+            model: "gemma3:1b",
+            temperature: 0.7,
+            top_p: 0.9,
+            num_ctx: 2048,
+            repeat_penalty: 1.1,
+            systemPrompt: "Eres un asistente útil."
+        };
+
+        const STICKER_COLORS = ['yellow', 'pink', 'blue', 'green', 'orange', 'purple'];
+        const TEXT_THEMES = ['light', 'dark'];
+
+        // Initialize app
+        async function init() {
+            await loadModels();
+            await loadGlobalPrompts();
+            loadAppState();
+            setupEventListeners();
+            setupKeyboardShortcuts();
+            updateZoomDisplay();
+            
+            // Create initial stickers if none exist
+            if (stickers.length === 0) {
+                createChatSticker();
+                createTextSticker();
+            }
+        }
+
+        // Load models from API
+        async function loadModels() {
+            try {
+                const response = await fetch('/models');
+                const data = await response.json();
+                models = data.models || [];
+            } catch (error) {
+                console.error('Error loading models:', error);
+                models = [{ name: 'gemma3:1b' }];
+            }
+        }
+
+        // Load global prompts
+        async function loadGlobalPrompts() {
+            try {
+                const response = await fetch('/prompts');
+                const data = await response.json();
+                globalPrompts = Object.values(data.prompts || {});
+                filteredPrompts = [...globalPrompts];
+            } catch (error) {
+                console.error('Error loading prompts:', error);
+                globalPrompts = [];
+                filteredPrompts = [];
+            }
+        }
+
+        // Canvas controls
+        function setZoom(newZoom) {
+            canvasState.zoom = Math.max(0.1, Math.min(3, newZoom));
+            updateCanvasTransform();
+            updateZoomDisplay();
+            saveCanvasState();
+        }
+
+        function setPan(x, y) {
+            canvasState.panX = x;
+            canvasState.panY = y;
+            updateCanvasTransform();
+            saveCanvasState();
+        }
+
+        function updateCanvasTransform() {
+            const canvas = document.getElementById('canvas');
+            canvas.style.transform = `scale(${canvasState.zoom}) translate(${canvasState.panX}px, ${canvasState.panY}px)`;
+        }
+
+        function updateZoomDisplay() {
+            document.getElementById('zoom-display').textContent = Math.round(canvasState.zoom * 100) + '%';
+        }
+
+        function resetZoom() {
+            setZoom(1);
+            setPan(0, 0);
+            showNotification('Zoom restablecido al 100%');
+        }
+
+        // Event listeners setup
+        function setupEventListeners() {
+            const container = document.getElementById('canvas-container');
+            
+            // Mouse wheel zoom
+            container.addEventListener('wheel', (e) => {
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                    setZoom(canvasState.zoom + delta);
+                }
+            });
+
+            // Pan with space + drag
+            container.addEventListener('mousedown', (e) => {
+                if (e.target === container || e.target.id === 'canvas') {
+                    if (e.button === 0) { // Left click
+                        if (e.shiftKey || appState.panMode) {
+                            startPanning(e);
+                        } else {
+                            deselectAllStickers();
+                        }
+                    }
+                }
+            });
+
+            container.addEventListener('mousemove', (e) => {
+                if (canvasState.isPanning) {
+                    updatePanning(e);
+                }
+            });
+
+            container.addEventListener('mouseup', () => {
+                stopPanning();
+            });
+
+            // Prevent context menu
+            container.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+        }
+
+        function startPanning(e) {
+            canvasState.isPanning = true;
+            canvasState.lastPanPoint = { x: e.clientX, y: e.clientY };
+            document.getElementById('canvas-container').classList.add('panning');
+        }
+
+        function updatePanning(e) {
+            if (!canvasState.isPanning) return;
+
+            const deltaX = e.clientX - canvasState.lastPanPoint.x;
+            const deltaY = e.clientY - canvasState.lastPanPoint.y;
+
+            setPan(
+                canvasState.panX + deltaX / canvasState.zoom,
+                canvasState.panY + deltaY / canvasState.zoom
+            );
+
+            canvasState.lastPanPoint = { x: e.clientX, y: e.clientY };
+        }
+
+        function stopPanning() {
+            canvasState.isPanning = false;
+            document.getElementById('canvas-container').classList.remove('panning');
+        }
+
+        // Keyboard shortcuts
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                // Check if user is typing in an input/textarea
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+
+                if (e.ctrlKey || e.metaKey) {
+                    switch (e.key) {
+                        case 'h':
+                        case 'H':
+                            e.preventDefault();
+                            toggleAllStickers();
+                            break;
+                        case 'e':
+                        case 'E':
+                            e.preventDefault();
+                            extractResponse();
+                            break;
+                        case 'p':
+                        case 'P':
+                            e.preventDefault();
+                            togglePresentationMode();
+                            break;
+                        case 'g':
+                        case 'G':
+                            e.preventDefault();
+                            toggleGrid();
+                            break;
+                        case 'n':
+                        case 'N':
+                            e.preventDefault();
+                            if (e.shiftKey) {
+                                createTextSticker();
+                            } else {
+                                createChatSticker();
+                            }
+                            break;
+                        case '0':
+                            e.preventDefault();
+                            resetZoom();
+                            break;
+                        case '=':
+                        case '+':
+                            e.preventDefault();
+                            setZoom(canvasState.zoom + 0.1);
+                            break;
+                        case '-':
+                            e.preventDefault();
+                            setZoom(canvasState.zoom - 0.1);
+                            break;
+                    }
+                } else {
+                    switch (e.key) {
+                        case 'Escape':
+                            deselectAllStickers();
+                            closeAllModals();
+                            break;
+                        case 'Delete':
+                        case 'Backspace':
+                            if (selectedSticker) {
+                                e.preventDefault();
+                                deleteSticker(selectedSticker.id);
+                            }
+                            break;
+                        case ' ':
+                            if (!e.target.closest('.sticker')) {
+                                e.preventDefault();
+                                appState.panMode = true;
+                            }
+                            break;
+                    }
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                if (e.key === ' ') {
+                    appState.panMode = false;
+                }
+            });
+        }
+
+        // Sticker creation
+        function createChatSticker() {
+            const sticker = {
+                id: Date.now(),
+                type: 'chat',
+                title: `Chat ${stickers.filter(s => s.type === 'chat').length + 1}`,
+                x: Math.random() * 400 + 100,
+                y: Math.random() * 300 + 100,
+                width: 320,
+                height: 280,
+                color: STICKER_COLORS[Math.floor(Math.random() * STICKER_COLORS.length)],
+                hidden: false,
+                ...DEFAULT_CHAT_CONFIG,
+                messages: [],
+                thinking: false
+            };
+
+            stickers.push(sticker);
+            renderSticker(sticker);
+            selectSticker(sticker);
+            saveStickers();
+            showNotification('Chat sticker creado');
+        }
+
+        function createTextSticker() {
+            const sticker = {
+                id: Date.now(),
+                type: 'text',
+                title: `Texto ${stickers.filter(s => s.type === 'text').length + 1}`,
+                x: Math.random() * 400 + 200,
+                y: Math.random() * 300 + 150,
+                width: 300,
+                height: 200,
+                theme: TEXT_THEMES[Math.floor(Math.random() * TEXT_THEMES.length)],
+                hidden: false,
+                content: '',
+                editable: true
+            };
+
+            stickers.push(sticker);
+            renderSticker(sticker);
+            selectSticker(sticker);
+            saveStickers();
+            showNotification('Text sticker creado');
+        }
+
+        // Sticker rendering
+        function renderSticker(sticker) {
+            const stickerEl = document.createElement('div');
+            stickerEl.className = `sticker ${sticker.type} ${sticker.color || sticker.theme || ''}`;
+            stickerEl.style.left = sticker.x + 'px';
+            stickerEl.style.top = sticker.y + 'px';
+            stickerEl.style.width = sticker.width + 'px';
+            stickerEl.style.height = sticker.height + 'px';
+            stickerEl.dataset.id = sticker.id;
+            stickerEl.tabIndex = 0;
+
+            if (sticker.hidden) {
+                stickerEl.classList.add('hidden');
+            }
+
+            if (sticker.thinking) {
+                stickerEl.classList.add('thinking');
+            }
+
+            stickerEl.innerHTML = sticker.type === 'chat' ? 
+                renderChatStickerContent(sticker) : 
+                renderTextStickerContent(sticker);
+
+            // Event listeners
+            stickerEl.addEventListener('mousedown', (e) => handleStickerMouseDown(e, sticker));
+            stickerEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectSticker(sticker);
+            });
+
+            document.getElementById('canvas').appendChild(stickerEl);
+        }
+
+        function renderChatStickerContent(sticker) {
+            const lastMessage = sticker.messages.length > 0 ? 
+                sticker.messages[sticker.messages.length - 1].content.substring(0, 150) + '...' : 
+                'Sin mensajes aún';
+
+            return `
+                <div class="sticker-header">
+                    <div class="sticker-title">${sticker.title}</div>
+                    <div class="sticker-controls">
+                        <button class="control-btn config" onclick="openConfigModal(${sticker.id})" title="Configurar">⚙️</button>
+                        <button class="control-btn hide" onclick="toggleStickerVisibility(${sticker.id})" title="Ocultar/Mostrar">👁️</button>
+                        <button class="control-btn extract" onclick="extractFromSticker(${sticker.id})" title="Extraer respuesta">📤</button>
+                        <button class="control-btn delete" onclick="deleteSticker(${sticker.id})" title="Eliminar">✕</button>
+                    </div>
+                </div>
+                <div class="sticker-content">
+                    <div class="chat-config">
+                        <select class="model-selector" onchange="updateStickerModel(${sticker.id}, this.value)">
+                            ${models.map(model => 
+                                `<option value="${model.name}" ${model.name === sticker.model ? 'selected' : ''}>${model.name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="message-preview">${lastMessage}</div>
+                    <textarea class="quick-input" placeholder="Mensaje rápido..." 
+                             onkeypress="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendQuickMessage(${sticker.id}, this.value); }"></textarea>
+                    <div class="chat-actions">
+                        <button class="action-btn" onclick="openChatModal(${sticker.id})">💬 Chat</button>
+                        <button class="action-btn" onclick="sendQuickMessage(${sticker.id})">Enviar</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTextStickerContent(sticker) {
+            return `
+                <div class="sticker-header">
+                    <div class="sticker-title">${sticker.title}</div>
+                    <div class="sticker-controls">
+                        <button class="control-btn config" onclick="openConfigModal(${sticker.id})" title="Configurar">⚙️</button>
+                        <button class="control-btn hide" onclick="toggleStickerVisibility(${sticker.id})" title="Ocultar/Mostrar">👁️</button>
+                        <button class="control-btn delete" onclick="deleteSticker(${sticker.id})" title="Eliminar">✕</button>
+                    </div>
+                </div>
+                <div class="sticker-content">
+                    ${sticker.editable ? 
+                        `<textarea class="text-content" placeholder="Escribe aquí..." 
+                                 oninput="updateTextContent(${sticker.id}, this.value)">${sticker.content}</textarea>` :
+                        `<div class="text-preview">${sticker.content}</div>`
+                    }
+                </div>
+            `;
+        }
+
+        // Sticker interaction
+        function selectSticker(sticker) {
+            deselectAllStickers();
+            selectedSticker = sticker;
+            const stickerEl = document.querySelector(`[data-id="${sticker.id}"]`);
+            stickerEl.classList.add('selected');
+        }
+
+        function deselectAllStickers() {
+            selectedSticker = null;
+            document.querySelectorAll('.sticker.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+        }
+
+        function deleteSticker(id) {
+            if (confirm('¿Eliminar este sticker?')) {
+                stickers = stickers.filter(s => s.id !== id);
+                document.querySelector(`[data-id="${id}"]`)?.remove();
+                if (selectedSticker?.id === id) {
+                    selectedSticker = null;
+                }
+                saveStickers();
+                showNotification('Sticker eliminado');
+            }
+        }
+
+        function toggleStickerVisibility(id) {
+            const sticker = stickers.find(s => s.id === id);
+            if (sticker) {
+                sticker.hidden = !sticker.hidden;
+                const stickerEl = document.querySelector(`[data-id="${id}"]`);
+                stickerEl.classList.toggle('hidden', sticker.hidden);
+                saveStickers();
+                showNotification(sticker.hidden ? 'Sticker ocultado' : 'Sticker mostrado');
+            }
+        }
+
+        // Global actions
+        function toggleAllStickers() {
+            appState.allHidden = !appState.allHidden;
+            stickers.forEach(sticker => {
+                sticker.hidden = appState.allHidden;
+                const stickerEl = document.querySelector(`[data-id="${sticker.id}"]`);
+                stickerEl.classList.toggle('hidden', sticker.hidden);
+            });
+            document.getElementById('hide-toggle-text').textContent = appState.allHidden ? 'Mostrar' : 'Ocultar';
+            saveStickers();
+            saveAppState();
+            showNotification(appState.allHidden ? 'Todos los stickers ocultados' : 'Todos los stickers mostrados');
+        }
+
+        function togglePresentationMode() {
+            appState.presentationMode = !appState.presentationMode;
+            const header = document.getElementById('header');
+            header.classList.toggle('hidden', appState.presentationMode);
+            
+            // Hide all controls in presentation mode
+            document.querySelectorAll('.sticker-controls, .chat-config, .chat-actions').forEach(el => {
+                el.style.display = appState.presentationMode ? 'none' : '';
+            });
+            
+            saveAppState();
+            showNotification(appState.presentationMode ? 'Modo presentación activado' : 'Modo presentación desactivado');
+        }
+
+        function toggleGrid() {
+            appState.gridVisible = !appState.gridVisible;
+            document.getElementById('canvas-container').classList.toggle('grid-visible', appState.gridVisible);
+            saveAppState();
+            showNotification(appState.gridVisible ? 'Grid visible' : 'Grid oculto');
+        }
+
+        // Extract functionality
+        function extractResponse() {
+            if (!selectedSticker || selectedSticker.type !== 'chat') {
+                showNotification('Selecciona un sticker de chat para extraer respuesta');
+                return;
+            }
+            extractFromSticker(selectedSticker.id);
+        }
+
+        function extractFromSticker(id) {
+            const chatSticker = stickers.find(s => s.id === id && s.type === 'chat');
+            if (!chatSticker || chatSticker.messages.length === 0) {
+                showNotification('No hay mensajes para extraer');
+                return;
+            }
+
+            const lastAssistantMessage = [...chatSticker.messages].reverse()
+                .find(m => m.role === 'assistant');
+
+            if (!lastAssistantMessage) {
+                showNotification('No hay respuestas del asistente para extraer');
+                return;
+            }
+
+            const textSticker = {
+                id: Date.now(),
+                type: 'text',
+                title: `Extraído de ${chatSticker.title}`,
+                x: chatSticker.x + 350,
+                y: chatSticker.y,
+                width: 300,
+                height: 200,
+                theme: 'light',
+                hidden: false,
+                content: lastAssistantMessage.content,
+                editable: true
+            };
+
+            stickers.push(textSticker);
+            renderSticker(textSticker);
+            selectSticker(textSticker);
+            saveStickers();
+            showNotification('Respuesta extraída a nuevo sticker de texto');
+        }
+
+        // Utility functions
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function closeAllModals() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+            });
+        }
+
+        // Storage functions
+        function saveStickers() {
+            localStorage.setItem('board2_stickers', JSON.stringify(stickers));
+        }
+
+        function loadStickers() {
+            const saved = localStorage.getItem('board2_stickers');
+            if (saved) {
+                stickers = JSON.parse(saved);
+                stickers.forEach(renderSticker);
+            }
+        }
+
+        function saveCanvasState() {
+            localStorage.setItem('board2_canvas', JSON.stringify(canvasState));
+        }
+
+        function loadCanvasState() {
+            const saved = localStorage.getItem('board2_canvas');
+            if (saved) {
+                const savedState = JSON.parse(saved);
+                canvasState = { ...canvasState, ...savedState };
+                updateCanvasTransform();
+                updateZoomDisplay();
+            }
+        }
+
+        function saveAppState() {
+            localStorage.setItem('board2_settings', JSON.stringify(appState));
+        }
+
+        function loadAppState() {
+            const saved = localStorage.getItem('board2_settings');
+            if (saved) {
+                const savedState = JSON.parse(saved);
+                appState = { ...appState, ...savedState };
+                
+                // Apply loaded state
+                if (appState.gridVisible) {
+                    document.getElementById('canvas-container').classList.add('grid-visible');
+                }
+                if (appState.allHidden) {
+                    document.getElementById('hide-toggle-text').textContent = 'Mostrar';
+                }
+            }
+            
+            loadCanvasState();
+            loadStickers();
+        }
+
+        // Drag and resize functionality
+        function handleStickerMouseDown(e, sticker) {
+            if (e.target.closest('.control-btn, .model-selector, .quick-input, .action-btn, .text-content')) {
+                return;
+            }
+
+            dragState.isDragging = true;
+            dragState.draggedSticker = sticker;
+            
+            const stickerEl = document.querySelector(`[data-id="${sticker.id}"]`);
+            const rect = stickerEl.getBoundingClientRect();
+            
+            dragState.dragOffset = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+
+            stickerEl.classList.add('dragging');
+            selectSticker(sticker);
+
+            document.addEventListener('mousemove', handleDrag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function handleDrag(e) {
+            if (!dragState.isDragging || !dragState.draggedSticker) return;
+
+            const container = document.getElementById('canvas-container');
+            const containerRect = container.getBoundingClientRect();
+            
+            const x = (e.clientX - containerRect.left - dragState.dragOffset.x) / canvasState.zoom - canvasState.panX;
+            const y = (e.clientY - containerRect.top - dragState.dragOffset.y) / canvasState.zoom - canvasState.panY;
+
+            dragState.draggedSticker.x = Math.max(0, x);
+            dragState.draggedSticker.y = Math.max(0, y);
+
+            const stickerEl = document.querySelector(`[data-id="${dragState.draggedSticker.id}"]`);
+            stickerEl.style.left = dragState.draggedSticker.x + 'px';
+            stickerEl.style.top = dragState.draggedSticker.y + 'px';
+        }
+
+        function stopDrag() {
+            if (dragState.isDragging && dragState.draggedSticker) {
+                const stickerEl = document.querySelector(`[data-id="${dragState.draggedSticker.id}"]`);
+                stickerEl.classList.remove('dragging');
+                saveStickers();
+            }
+            
+            dragState.isDragging = false;
+            dragState.draggedSticker = null;
+            
+            document.removeEventListener('mousemove', handleDrag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        function updateStickerModel(id, model) {
+            const sticker = stickers.find(s => s.id === id);
+            if (sticker) {
+                sticker.model = model;
+                saveStickers();
+            }
+        }
+
+        function updateTextContent(id, content) {
+            const sticker = stickers.find(s => s.id === id);
+            if (sticker) {
+                sticker.content = content;
+                saveStickers();
+            }
+        }
+
+        // Chat functionality
+        async function sendQuickMessage(id, message) {
+            const stickerEl = document.querySelector(`[data-id="${id}"]`);
+            const input = stickerEl.querySelector('.quick-input');
+            
+            if (!message) {
+                message = input.value.trim();
+            }
+            
+            if (!message) return;
+            
+            input.value = '';
+            
+            const sticker = stickers.find(s => s.id === id);
+            if (!sticker) return;
+
+            // Add user message
+            sticker.messages.push({ role: 'user', content: message });
+            
+            // Set thinking state
+            sticker.thinking = true;
+            stickerEl.classList.add('thinking');
+            
+            try {
+                await sendChatRequest(sticker, message);
+            } catch (error) {
+                console.error('Error sending message:', error);
+                sticker.messages.push({ role: 'assistant', content: 'Error: No se pudo enviar el mensaje.' });
+            } finally {
+                sticker.thinking = false;
+                stickerEl.classList.remove('thinking');
+                updateStickerPreview(sticker);
+                saveStickers();
+            }
+        }
+
+        async function sendChatRequest(sticker, message) {
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: message,
+                    model: sticker.model,
+                    system_prompt: sticker.systemPrompt,
+                    temperature: sticker.temperature,
+                    top_p: sticker.top_p,
+                    num_ctx: sticker.num_ctx,
+                    repeat_penalty: sticker.repeat_penalty
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let assistantMessage = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.response) {
+                                assistantMessage += data.response;
+                                // Update chat modal if open
+                                if (currentChatSticker && currentChatSticker.id === sticker.id) {
+                                    updateChatModalMessages();
+                                }
+                            }
+                            if (data.done) {
+                                sticker.messages.push({ role: 'assistant', content: assistantMessage });
+                                return;
+                            }
+                        } catch (e) {
+                            // Ignore parsing errors
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateStickerPreview(sticker) {
+            const stickerEl = document.querySelector(`[data-id="${sticker.id}"]`);
+            const preview = stickerEl.querySelector('.message-preview');
+            
+            if (sticker.messages.length > 0) {
+                const lastMessage = sticker.messages[sticker.messages.length - 1].content;
+                preview.textContent = lastMessage.substring(0, 150) + (lastMessage.length > 150 ? '...' : '');
+            } else {
+                preview.textContent = 'Sin mensajes aún';
+            }
+        }
+
+        // Modal functions
+        function openChatModal(id) {
+            currentChatSticker = stickers.find(s => s.id === id);
+            if (!currentChatSticker) return;
+
+            document.getElementById('chat-modal-title').textContent = currentChatSticker.title;
+            updateChatModalMessages();
+            document.getElementById('chat-modal').style.display = 'block';
+        }
+
+        function closeChatModal() {
+            document.getElementById('chat-modal').style.display = 'none';
+            currentChatSticker = null;
+        }
+
+        function updateChatModalMessages() {
+            const container = document.getElementById('chat-messages');
+            container.innerHTML = '';
+
+            if (currentChatSticker) {
+                currentChatSticker.messages.forEach(message => {
+                    const messageEl = document.createElement('div');
+                    messageEl.style.cssText = `
+                        margin-bottom: 1rem;
+                        padding: 0.75rem;
+                        border-radius: 8px;
+                        max-width: 80%;
+                        ${message.role === 'user' ? 
+                            'background: #e3f2fd; margin-left: auto; text-align: right;' : 
+                            'background: #f5f5f5; margin-right: auto;'}
+                    `;
+                    messageEl.textContent = message.content;
+                    container.appendChild(messageEl);
+                });
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('send-btn');
+            const message = input.value.trim();
+
+            if (!message || !currentChatSticker) return;
+
+            input.value = '';
+            sendBtn.disabled = true;
+
+            // Add user message
+            currentChatSticker.messages.push({ role: 'user', content: message });
+            updateChatModalMessages();
+
+            try {
+                await sendChatRequest(currentChatSticker, message);
+                updateChatModalMessages();
+                updateStickerPreview(currentChatSticker);
+            } catch (error) {
+                console.error('Error sending message:', error);
+                currentChatSticker.messages.push({ role: 'assistant', content: 'Error: No se pudo enviar el mensaje.' });
+                updateChatModalMessages();
+            } finally {
+                sendBtn.disabled = false;
+                saveStickers();
+            }
+        }
+
+        // Config modal functions
+        function openConfigModal(id) {
+            currentConfigSticker = stickers.find(s => s.id === id);
+            if (!currentConfigSticker) return;
+
+            document.getElementById('config-modal-title').textContent = 
+                `Configurar ${currentConfigSticker.type === 'chat' ? 'Chat' : 'Texto'}`;
+
+            renderConfigModal();
+            document.getElementById('config-modal').style.display = 'block';
+        }
+
+        function closeConfigModal() {
+            document.getElementById('config-modal').style.display = 'none';
+            currentConfigSticker = null;
+        }
+
+        function renderConfigModal() {
+            const body = document.getElementById('config-modal-body');
+            
+            if (currentConfigSticker.type === 'chat') {
+                body.innerHTML = `
+                    <div class="config-section">
+                        <h3>🎯 Prompt del Sistema</h3>
+                        <div class="config-group">
+                            <label>Prompts Guardados:</label>
+                            <select id="config-saved-prompts" class="config-input" onchange="loadSelectedPrompt()">
+                                <option value="">-- Seleccionar prompt guardado --</option>
+                                ${globalPrompts.map(prompt => 
+                                    `<option value="${prompt.id}">${prompt.name}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="config-group">
+                            <label>Prompt personalizado:</label>
+                            <textarea id="config-system-prompt" class="config-input" rows="4">${currentConfigSticker.systemPrompt}</textarea>
+                        </div>
+                        <div class="config-group">
+                            <label>
+                                <input type="checkbox" id="config-save-prompt"> Guardar este prompt como plantilla
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="config-section">
+                        <h3>🤖 Modelo y Parámetros</h3>
+                        <div class="config-grid">
+                            <div class="config-group">
+                                <label>Modelo:</label>
+                                <select id="config-model" class="config-input">
+                                    ${models.map(model => 
+                                        `<option value="${model.name}" ${model.name === currentConfigSticker.model ? 'selected' : ''}>${model.name}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div class="config-group">
+                                <label>Temperatura:</label>
+                                <input type="number" id="config-temperature" class="config-input" 
+                                       min="0" max="2" step="0.1" value="${currentConfigSticker.temperature}">
+                            </div>
+                            <div class="config-group">
+                                <label>Top P:</label>
+                                <input type="number" id="config-top-p" class="config-input" 
+                                       min="0" max="1" step="0.1" value="${currentConfigSticker.top_p}">
+                            </div>
+                            <div class="config-group">
+                                <label>Contexto:</label>
+                                <input type="number" id="config-num-ctx" class="config-input" 
+                                       min="512" max="8192" step="512" value="${currentConfigSticker.num_ctx}">
+                            </div>
+                            <div class="config-group">
+                                <label>Penalización Repetición:</label>
+                                <input type="number" id="config-repeat-penalty" class="config-input" 
+                                       min="0.1" max="2" step="0.1" value="${currentConfigSticker.repeat_penalty}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-section">
+                        <h3>🎨 Apariencia</h3>
+                        <div class="config-grid">
+                            <div class="config-group">
+                                <label>Título:</label>
+                                <input type="text" id="config-title" class="config-input" value="${currentConfigSticker.title}">
+                            </div>
+                            <div class="config-group">
+                                <label>Color:</label>
+                                <div class="color-picker">
+                                    ${STICKER_COLORS.map(color => 
+                                        `<div class="color-option ${color} ${color === currentConfigSticker.color ? 'selected' : ''}" 
+                                              data-color="${color}" 
+                                              style="background: linear-gradient(135deg, var(--${color}-start, #ffeaa7), var(--${color}-end, #fdcb6e));"
+                                              onclick="selectColor('${color}')"></div>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                body.innerHTML = `
+                    <div class="config-section">
+                        <h3>📝 Contenido</h3>
+                        <div class="config-group">
+                            <label>Título:</label>
+                            <input type="text" id="config-title" class="config-input" value="${currentConfigSticker.title}">
+                        </div>
+                        <div class="config-group">
+                            <label>
+                                <input type="checkbox" id="config-editable" ${currentConfigSticker.editable ? 'checked' : ''}> Editable
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="config-section">
+                        <h3>🎨 Apariencia</h3>
+                        <div class="config-group">
+                            <label>Tema:</label>
+                            <select id="config-theme" class="config-input">
+                                <option value="light" ${currentConfigSticker.theme === 'light' ? 'selected' : ''}>Claro</option>
+                                <option value="dark" ${currentConfigSticker.theme === 'dark' ? 'selected' : ''}>Oscuro</option>
+                            </select>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function selectColor(color) {
+            document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+            document.querySelector(`[data-color="${color}"]`).classList.add('selected');
+        }
+
+        function loadSelectedPrompt() {
+            const selector = document.getElementById('config-saved-prompts');
+            const promptId = selector.value;
+            
+            if (promptId) {
+                const prompt = globalPrompts.find(p => p.id === promptId);
+                if (prompt) {
+                    document.getElementById('config-system-prompt').value = prompt.prompt;
+                }
+            }
+        }
+
+        async function saveConfig() {
+            if (!currentConfigSticker) return;
+
+            if (currentConfigSticker.type === 'chat') {
+                // Save as template if checked
+                const saveAsTemplate = document.getElementById('config-save-prompt').checked;
+                const promptText = document.getElementById('config-system-prompt').value;
+
+                if (saveAsTemplate && promptText.trim()) {
+                    const promptName = generatePromptName(promptText);
+                    try {
+                        await savePromptToServer(promptName, promptText, "Creado desde sticker");
+                        document.getElementById('config-save-prompt').checked = false;
+                    } catch (error) {
+                        console.error('Error saving prompt:', error);
+                    }
+                }
+
+                // Update chat sticker config
+                currentConfigSticker.title = document.getElementById('config-title').value;
+                currentConfigSticker.model = document.getElementById('config-model').value;
+                currentConfigSticker.temperature = parseFloat(document.getElementById('config-temperature').value);
+                currentConfigSticker.top_p = parseFloat(document.getElementById('config-top-p').value);
+                currentConfigSticker.num_ctx = parseInt(document.getElementById('config-num-ctx').value);
+                currentConfigSticker.repeat_penalty = parseFloat(document.getElementById('config-repeat-penalty').value);
+                currentConfigSticker.systemPrompt = promptText || DEFAULT_CHAT_CONFIG.systemPrompt;
+
+                const selectedColor = document.querySelector('.color-option.selected');
+                if (selectedColor) {
+                    currentConfigSticker.color = selectedColor.dataset.color;
+                }
+            } else {
+                // Update text sticker config
+                currentConfigSticker.title = document.getElementById('config-title').value;
+                currentConfigSticker.editable = document.getElementById('config-editable').checked;
+                currentConfigSticker.theme = document.getElementById('config-theme').value;
+            }
+
+            // Re-render sticker
+            const stickerEl = document.querySelector(`[data-id="${currentConfigSticker.id}"]`);
+            if (stickerEl) {
+                stickerEl.remove();
+                renderSticker(currentConfigSticker);
+                selectSticker(currentConfigSticker);
+            }
+
+            saveStickers();
+            closeConfigModal();
+            showNotification('Configuración guardada');
+        }
+
+        // Global prompts functions
+        function openGlobalPromptsModal() {
+            document.getElementById('prompts-modal').style.display = 'block';
+            renderPromptsList();
+        }
+
+        function closeGlobalPromptsModal() {
+            document.getElementById('prompts-modal').style.display = 'none';
+            // Clear form
+            document.getElementById('new-prompt-name').value = '';
+            document.getElementById('new-prompt-description').value = '';
+            document.getElementById('new-prompt-content').value = '';
+            document.getElementById('prompt-search').value = '';
+            filteredPrompts = [...globalPrompts];
+        }
+
+        function renderPromptsList() {
+            const container = document.getElementById('prompts-list');
+            container.innerHTML = '';
+
+            if (filteredPrompts.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">No hay prompts guardados.</p>';
+                return;
+            }
+
+            filteredPrompts.forEach(prompt => {
+                const promptEl = document.createElement('div');
+                promptEl.style.cssText = 'border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 0.5rem; background: #f9f9f9;';
+                
+                promptEl.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0 0 0.25rem 0; color: #333;">${prompt.name}</h4>
+                            ${prompt.description ? `<p style="margin: 0; font-size: 0.85rem; color: #666;">${prompt.description}</p>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <button onclick="editPrompt('${prompt.id}')" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">
+                                Editar
+                            </button>
+                            <button onclick="deletePrompt('${prompt.id}')" style="background: #e74c3c; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; max-height: 100px; overflow-y: auto;">
+                        ${prompt.prompt}
+                    </div>
+                    ${prompt.last_used ? `<div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">Último uso: ${new Date(prompt.last_used).toLocaleDateString()}</div>` : ''}
+                `;
+                
+                container.appendChild(promptEl);
+            });
+        }
+
+        function filterPrompts() {
+            const searchTerm = document.getElementById('prompt-search').value.toLowerCase();
+            filteredPrompts = globalPrompts.filter(prompt => 
+                prompt.name.toLowerCase().includes(searchTerm) ||
+                (prompt.description && prompt.description.toLowerCase().includes(searchTerm)) ||
+                prompt.prompt.toLowerCase().includes(searchTerm)
+            );
+            renderPromptsList();
+        }
+
+        async function createNewPrompt() {
+            const name = document.getElementById('new-prompt-name').value.trim();
+            const description = document.getElementById('new-prompt-description').value.trim();
+            const content = document.getElementById('new-prompt-content').value.trim();
+
+            if (!name || !content) {
+                showNotification('Por favor completa el nombre y contenido del prompt');
+                return;
+            }
+
+            await savePromptToServer(name, content, description);
+            
+            // Clear form
+            document.getElementById('new-prompt-name').value = '';
+            document.getElementById('new-prompt-description').value = '';
+            document.getElementById('new-prompt-content').value = '';
+        }
+
+        async function savePromptToServer(name, prompt, description = "") {
+            try {
+                // Check for duplicates
+                const isDuplicate = globalPrompts.some(p => p.prompt.trim() === prompt.trim());
+                if (isDuplicate) {
+                    showNotification('Este prompt ya existe');
+                    return;
+                }
+
+                const response = await fetch('/prompts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        prompt: prompt,
+                        description: description
+                    })
+                });
+
+                if (response.ok) {
+                    await loadGlobalPrompts();
+                    renderPromptsList();
+                    showNotification('Prompt guardado exitosamente');
+                } else {
+                    throw new Error('Error saving prompt');
+                }
+            } catch (error) {
+                console.error('Error saving prompt:', error);
+                showNotification('Error al guardar el prompt');
+            }
+        }
+
+        async function deletePrompt(promptId) {
+            if (confirm('¿Eliminar este prompt?')) {
+                try {
+                    const response = await fetch(`/prompts/${promptId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        await loadGlobalPrompts();
+                        renderPromptsList();
+                        showNotification('Prompt eliminado');
+                    } else {
+                        throw new Error('Error deleting prompt');
+                    }
+                } catch (error) {
+                    console.error('Error deleting prompt:', error);
+                    showNotification('Error al eliminar el prompt');
+                }
+            }
+        }
+
+        function editPrompt(promptId) {
+            const prompt = globalPrompts.find(p => p.id === promptId);
+            if (prompt) {
+                document.getElementById('new-prompt-name').value = prompt.name;
+                document.getElementById('new-prompt-description').value = prompt.description || '';
+                document.getElementById('new-prompt-content').value = prompt.prompt;
+                
+                // Delete the original
+                deletePrompt(promptId);
+            }
+        }
+
+        function generatePromptName(promptText) {
+            const words = promptText.trim().split(' ').slice(0, 4);
+            return words.join(' ') + (promptText.split(' ').length > 4 ? '...' : '');
+        }
+
+        // Additional event listeners for better UX
+        function setupAdditionalEventListeners() {
+            // Modal backdrop clicks
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                        if (modal.id === 'chat-modal') currentChatSticker = null;
+                        if (modal.id === 'config-modal') currentConfigSticker = null;
+                    }
+                });
+            });
+
+            // Enter key in chat input
+            document.getElementById('chat-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChatMessage();
+                }
+            });
+
+            // Resize observer for canvas auto-expand
+            const resizeObserver = new ResizeObserver(() => {
+                updateCanvasSize();
+            });
+            resizeObserver.observe(document.getElementById('canvas'));
+
+            // Window resize handler
+            window.addEventListener('resize', () => {
+                updateCanvasSize();
+            });
+        }
+
+        function updateCanvasSize() {
+            const canvas = document.getElementById('canvas');
+            let maxX = 0, maxY = 0;
+
+            stickers.forEach(sticker => {
+                maxX = Math.max(maxX, sticker.x + sticker.width);
+                maxY = Math.max(maxY, sticker.y + sticker.height);
+            });
+
+            const padding = 400;
+            const minWidth = window.innerWidth;
+            const minHeight = window.innerHeight - 60; // Account for header
+
+            canvas.style.minWidth = Math.max(minWidth, maxX + padding) + 'px';
+            canvas.style.minHeight = Math.max(minHeight, maxY + padding) + 'px';
+        }
+
+        // Initialize everything
+        async function initializeApp() {
+            await init();
+            setupAdditionalEventListeners();
+        }
+
+        initializeApp();
+    </script>
+</body>
+</html>

@@ -89,6 +89,15 @@ async def board_page():
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Board page not found")
 
+@app.get("/board2", response_class=HTMLResponse)
+async def board2_page():
+    """Sirve la página del pizarrón avanzado v2"""
+    try:
+        with open("static/board2.html", "r", encoding="utf-8") as file:
+            return HTMLResponse(content=file.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Board v2 page not found")
+
 @app.post("/chat")
 async def chat(request: ChatMessage):
     config = load_config()
